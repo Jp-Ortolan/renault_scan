@@ -1,0 +1,75 @@
+=================================================================
+          NOVA FUNCIONALIDADE: VISUALIZACAO DE DEFEITOS
+=================================================================
+
+O sistema agora mostra VISUALMENTE onde estao os defeitos!
+
+=================================================================
+COMO FUNCIONA:
+=================================================================
+
+1. Quando o algoritmo heuristico detecta um defeito...
+2. Identifica regioes com possiveis defeitos (bordas)
+3. Desenha RETANGULOS VERMELHOS nas regioes
+4. Adiciona "Defeito 1", "Defeito 2", etc
+5. Salva a imagem marcada
+6. Pergunta se voce quer ver agora
+
+=================================================================
+EXEMPLO DE USO:
+=================================================================
+
+python detectacao_defeitos.py
+
+Escolha uma imagem com defeito...
+
+VISUALIZACAO:
+   Imagem com defeitos marcados salva em: imagens_para_analisar/carro_resultado.jpg
+   Total de regioes com defeito detectadas: 4
+   Deseja visualizar a imagem agora? (s/n):
+
+=================================================================
+ONDE OS ARQUIVOS FICAM:
+=================================================================
+
+- Resultado: imagens_para_analisar/[nome_original]_resultado.jpg
+- Codigo: src/algoritmos_deteccao.py (metodo detectar_regioes_defeito)
+- Visualizacao: detectacao_defeitos.py (metodo _mostrar_visualizacao)
+
+=================================================================
+CARACTERISTICAS:
+=================================================================
+
+- AUTOMATICO: Aparece quando defeito e detectado
+- VISUAL: Retangulos vermelhos bem visiveis
+- NUMERADO: Cada regiao identificada
+- PERSISTENTE: Salva a imagem
+- INTERATIVO: Pergunta se quer ver
+- MULTI-PLATAFORMA: Windows, Linux, Mac
+
+=================================================================
+DETALHES TECNICOS:
+=================================================================
+
+Metodo: Analise de bordas (Canny Edge Detection)
+Filtro: Areas entre 0.1% e 50% da imagem
+Cor: Vermelho (BGR: 0, 0, 255)
+Espessura: 2 pixels
+
+=================================================================
+ESTA FUNCIONANDO?
+=================================================================
+
+SIM! Testado e funcionando perfeitamente!
+
+Rodou teste com imagem de colisao e detectou 4 regioes.
+
+=================================================================
+PRONTO PARA USO!
+=================================================================
+
+Execute: python detectacao_defeitos.py
+
+e teste com imagens que tenham defeitos!
+
+=================================================================

@@ -13,6 +13,14 @@ sys.path.append(os.path.join(os.path.dirname(__file__), 'src'))
 
 from algoritmos_deteccao import AlgoritmoAleatorio, AlgoritmoHeuristico
 
+# Importa Deep Learning se disponível
+try:
+    from deep_learning import AlgoritmoDeepLearning
+    DEEP_LEARNING_DISPONIVEL = True
+except ImportError:
+    print("[AVISO] Deep Learning não disponível. Instale torch e torchvision.")
+    DEEP_LEARNING_DISPONIVEL = False
+
 
 class SistemaDetecaoDefeitos:
     """
@@ -24,8 +32,22 @@ class SistemaDetecaoDefeitos:
         self.algo_aleatorio = AlgoritmoAleatorio(seed=42)
         self.algo_heuristico = AlgoritmoHeuristico()
         
+        # Inicializa Deep Learning se disponível
+        if DEEP_LEARNING_DISPONIVEL:
+            try:
+                self.algo_deep_learning = AlgoritmoDeepLearning(usar_transfer_learning=True)
+                print("[DL] Algoritmo de Deep Learning inicializado com sucesso!")
+            except Exception as e:
+                print(f"[DL] Erro ao inicializar Deep Learning: {e}")
+                self.algo_deep_learning = None
+        else:
+            self.algo_deep_learning = None
+        
         # Cria pasta se não existir
         os.makedirs(self.pasta_imagens, exist_ok=True)
+        
+        # Cria pasta para modelos de Deep Learning
+        os.makedirs("modelos_deep_learning", exist_ok=True)
         
         # Extensões de imagem suportadas
         self.extensoes_validas = {'.jpg', '.jpeg', '.png', '.bmp', '.tiff'}
@@ -59,15 +81,34 @@ class SistemaDetecaoDefeitos:
             pred_aleatorio = self.algo_aleatorio.prever_uma(imagem_redim)
             pred_heuristico = self.algo_heuristico.prever_uma(imagem_redim)
             
+            # Executa análise de Deep Learning se disponível
+            pred_deep_learning = None
+            caracteristicas_dl = None
+            if self.algo_deep_learning is not None:
+                try:
+                    pred_deep_learning, confianca_dl = self.algo_deep_learning.prever_com_confianca(imagem_redim)
+                    caracteristicas_dl = self.algo_deep_learning.obter_caracteristicas_detalhadas(imagem_redim)
+                except Exception as e:
+                    print(f"[DL] Erro na análise: {e}")
+            
             # Obtém características detalhadas
             caracteristicas = self.algo_heuristico.obter_caracteristicas_detalhadas(imagem_redim)
+            
+            # Detecta regiões com defeitos para visualização
+            regioes_defeito = []
+            if pred_heuristico == "defeito":
+                regioes_defeito = self.algo_heuristico.detectar_regioes_defeito(imagem)
             
             return {
                 'arquivo': os.path.basename(caminho_imagem),
                 'pred_aleatorio': pred_aleatorio,
                 'pred_heuristico': pred_heuristico,
+                'pred_deep_learning': pred_deep_learning,
                 'caracteristicas': caracteristicas,
-                'dimensoes': imagem.shape
+                'caracteristicas_dl': caracteristicas_dl,
+                'dimensoes': imagem.shape,
+                'imagem': imagem,
+                'regioes_defeito': regioes_defeito
             }, None
             
         except Exception as e:
@@ -88,12 +129,29 @@ class SistemaDetecaoDefeitos:
         print(f"   Algoritmo Aleatorio: {status_aleatorio} {resultado['pred_aleatorio'].upper()}")
         print(f"   Algoritmo Heuristico: {status_heuristico} {resultado['pred_heuristico'].upper()}")
         
-        print(f"\nCARACTERISTICAS TECNICAS:")
+        # Mostra resultados de Deep Learning se disponível
+        if resultado['pred_deep_learning'] is not None:
+            status_dl = "[DEFEITO]" if resultado['pred_deep_learning'] == "defeito" else "[OK]"
+            if resultado['caracteristicas_dl']:
+                confianca = resultado['caracteristicas_dl']['confianca'] * 100
+                print(f"   Deep Learning (CNN): {status_dl} {resultado['pred_deep_learning'].upper()} (Confiança: {confianca:.1f}%)")
+            else:
+                print(f"   Deep Learning (CNN): {status_dl} {resultado['pred_deep_learning'].upper()}")
+        
+        print(f"\nCARACTERISTICAS TECNICAS (Heuristico):")
         char = resultado['caracteristicas']
         print(f"   Intensidade de Bordas: {char['intensidade_bordas']:.2f}")
         print(f"   Variacao de Intensidade: {char['variacao_intensidade']:.3f}")
         print(f"   Threshold Bordas: {char['threshold_bordas']}")
         print(f"   Threshold Intensidade: {char['threshold_intensidade']}")
+        
+        # Mostra características de Deep Learning se disponível
+        if resultado['caracteristicas_dl']:
+            print(f"\nCARACTERISTICAS TECNICAS (Deep Learning):")
+            char_dl = resultado['caracteristicas_dl']
+            print(f"   Confianca: {char_dl['confianca']*100:.1f}%")
+            print(f"   Modelo: {'ResNet18 Transfer Learning' if char_dl['usar_transfer_learning'] else 'CNN Customizada'}")
+            print(f"   Device: {char_dl['device']}")
         
         print(f"\nINTERPRETACAO:")
         if char['intensidade_bordas'] > char['threshold_bordas']:
@@ -107,10 +165,60 @@ class SistemaDetecaoDefeitos:
             print("   Variacao baixa: Superficie uniforme")
         
         print(f"\nRECOMENDACAO:")
+        # Considera todos os algoritmos na recomendação
+        votos_defeito = 0
+        if resultado['pred_aleatorio'] == "defeito":
+            votos_defeito += 1
         if resultado['pred_heuristico'] == "defeito":
-            print("   ATENCAO: Defeito detectado! Verificar manualmente.")
+            votos_defeito += 1
+        if resultado['pred_deep_learning'] == "defeito":
+            votos_defeito += 1
+        
+        num_algoritmos = 2 + (1 if resultado['pred_deep_learning'] is not None else 0)
+        
+        if votos_defeito >= num_algoritmos / 2:
+            print("   ATENCAO: Defeito detectado por maioria dos algoritmos! Verificar manualmente.")
         else:
-            print("   OK: Nenhum defeito detectado.")
+            print("   OK: Nenhum defeito detectado pela maioria dos algoritmos.")
+        
+        # Mostra visualização se houver defeito detectado
+        if resultado.get('regioes_defeito') and len(resultado['regioes_defeito']) > 0:
+            self._mostrar_visualizacao(resultado)
+    
+    def _mostrar_visualizacao(self, resultado):
+        """Mostra a visualização da imagem com regiões de defeito marcadas."""
+        imagem = resultado['imagem'].copy()
+        regioes = resultado['regioes_defeito']
+        
+        # Desenha retângulos nas regiões de defeito
+        for i, (x, y, w, h) in enumerate(regioes, 1):
+            # Cor vermelha para defeitos
+            cv2.rectangle(imagem, (x, y), (x + w, y + h), (0, 0, 255), 2)
+            # Adiciona número da região
+            cv2.putText(imagem, f"Defeito {i}", (x, y - 5), 
+                       cv2.FONT_HERSHEY_SIMPLEX, 0.5, (0, 0, 255), 2)
+        
+        # Salva a imagem com visualização
+        nome_arquivo = resultado['arquivo']
+        nome_base = os.path.splitext(nome_arquivo)[0]
+        imagem_resultado = os.path.join("imagens_para_analisar", f"{nome_base}_resultado.jpg")
+        cv2.imwrite(imagem_resultado, imagem)
+        
+        print(f"\nVISUALIZACAO:")
+        print(f"   Imagem com defeitos marcados salva em: {imagem_resultado}")
+        print(f"   Total de regioes com defeito detectadas: {len(regioes)}")
+        
+        # Pergunta se quer ver a imagem
+        try:
+            mostrar = input("   Deseja visualizar a imagem agora? (s/n): ").strip().lower()
+            if mostrar == 's':
+                # Tenta abrir a imagem
+                if os.name == 'nt':  # Windows
+                    os.startfile(imagem_resultado)
+                elif os.name == 'posix':  # Linux/Mac
+                    os.system(f'xdg-open {imagem_resultado}')
+        except:
+            pass  # Se não conseguir, continua
     
     def executar_sistema(self):
         """Executa o sistema principal."""

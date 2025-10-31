@@ -152,6 +152,42 @@ class AlgoritmoHeuristico:
             "threshold_intensidade": self.threshold_intensidade,
             "previsao": self.prever_uma(imagem)
         }
+    
+    def detectar_regioes_defeito(self, imagem: np.ndarray) -> list:
+        """
+        Detecta regiões com possíveis defeitos usando análise de bordas.
+        
+        Args:
+            imagem (np.ndarray): Imagem para analisar
+            
+        Returns:
+            list: Lista de coordenadas (x, y, w, h) das regiões com defeitos
+        """
+        # Converte para escala de cinza
+        if len(imagem.shape) == 3:
+            gray = cv2.cvtColor(imagem, cv2.COLOR_BGR2GRAY)
+        else:
+            gray = imagem.copy()
+        
+        # Detecta bordas usando Canny
+        bordas = cv2.Canny(gray, 50, 150)
+        
+        # Encontra contornos
+        contornos, _ = cv2.findContours(bordas, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE)
+        
+        # Filtra contornos por tamanho e área
+        regioes = []
+        h, w = gray.shape
+        min_area = (w * h) * 0.001  # Área mínima de 0.1% da imagem
+        max_area = (w * h) * 0.5   # Área máxima de 50% da imagem
+        
+        for contorno in contornos:
+            area = cv2.contourArea(contorno)
+            if min_area < area < max_area:
+                x, y, w_box, h_box = cv2.boundingRect(contorno)
+                regioes.append((x, y, w_box, h_box))
+        
+        return regioes
 
 
 # Este arquivo contém apenas os algoritmos de detecção de defeitos
